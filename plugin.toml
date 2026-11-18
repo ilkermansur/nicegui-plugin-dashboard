@@ -1,5 +1,13 @@
 id = "dashboard"
-name = { tr = "dashboard", en = "dashboard" }
 version = "0.1.0"
-description = { tr = "dashboard eklentisi", en = "The dashboard plugin" }
-core = ">=1,<2"
+core = ">=1.1,<2"  # uses ctx.data_dir
+dependencies = ["sqlalchemy>=2.0", "psycopg[binary]>=3.1"]
+permissions = ["dashboard.edit"]
+
+[name]
+tr = "Gösterge paneli"
+en = "Dashboard"
+
+[description]
+tr = "Veritabanındaki tablolardan grafik çizer; grafikler ekrandan oluşturulur ve düzenlenir."
+en = "Charts from database tables; charts are built and edited on screen."
