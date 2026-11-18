@@ -19,8 +19,10 @@ from .db import AGGS, CHART_TYPES, ChartError
 CSS = """
 .ngui-dashboard-kpis, .ngui-dashboard-grid { display: grid; width: 100%; gap: var(--ngui-gap); }
 .ngui-dashboard-kpis { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-.ngui-dashboard-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
-.ngui-dashboard-chart { width: 100%; height: 280px; }
+.ngui-dashboard-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); grid-auto-flow: dense; }
+.ngui-dashboard-wide { grid-column: span 2; }
+@media (max-width: 900px) { .ngui-dashboard-wide { grid-column: auto; } }
+.ngui-dashboard-chart { width: 100%; height: 260px; }
 .ngui-dashboard-chart svg text { fill: var(--ngui-muted) !important; stroke: none !important; }
 .ngui-dashboard-muted { color: var(--ngui-muted); font-size: 0.875rem; }
 .ngui-dashboard-error { color: var(--ngui-danger); font-size: 0.875rem; }
@@ -51,7 +53,13 @@ def setup(ctx):
         theme = ctx.role("theme")
         can_edit = ctx.role("auth").has("dashboard.edit")
         url = db_url()
-        theme.page_header(t("title"), t("description"))
+        def header_actions():
+            if can_edit:
+                ui.button(t("source.title"), icon="storage", on_click=lambda: source_dialog(), color=None).props(
+                    "outline")
+                ui.button(t("chart.new"), icon="add_chart", on_click=lambda: builder())
+
+        theme.page_header(t("title"), t("description"), actions=header_actions)
         try:
             tables, problem = await run.io_bound(db.schema, url), None
         except ChartError as e:
@@ -68,17 +76,14 @@ def setup(ctx):
 
         # --- summary and toolbar ------------------------------------------------------------
         with ui.element("div").classes("ngui-dashboard-kpis"):
-            theme.kpi(t("kpi.charts"), len(charts()), icon="insights", tone="primary")
-            theme.kpi(t("kpi.tables"), len(tables), icon="table_chart")
-            theme.kpi(t("kpi.source"), t("source.demo") if url == demo else db.masked(url).split("@")[-1],
-                      icon="storage", tone="danger" if problem else "success")
+            theme.kpi(t("kpi.charts"), len(charts()), icon="insights")
+            theme.kpi(t("kpi.tables"), len(tables), icon="table_chart",
+                      delta=t("kpi.rows_hint"), trend=None)
+            theme.kpi(t("kpi.source"), db.source_name(url), icon="storage", tone="danger" if problem else "neutral",
+                      delta=t("source.demo") if url == demo else db.masked(url).split("@")[-1],
+                      trend="down" if problem else None)
         if problem:
             ui.label(problem).classes("ngui-dashboard-error")
-        if can_edit:
-            with ui.row().classes("items-center gap-2"):
-                ui.button(t("chart.new"), icon="add_chart", on_click=lambda: builder()).props("unelevated")
-                ui.button(t("source.title"), icon="storage", on_click=lambda: source_dialog(), color=None).props(
-                    "flat")
 
         # --- charts ------------------------------------------------------------------------
         async def fill(chart: dict, box) -> None:
@@ -114,7 +119,10 @@ def setup(ctx):
                                 "flat round dense").tooltip(t("chart.edit"))
                             ui.button(icon="delete", on_click=lambda: confirm_delete(chart), color=None).props(
                                 "flat round dense").tooltip(t("chart.delete"))
-                    with theme.card(chart["title"], actions=actions).classes("w-full"):
+                    meta = t(f"agg.{chart['agg']}") if chart["type"] != "scatter" and chart.get("agg") else t("type.scatter")
+                    wide = " ngui-dashboard-wide" if chart["type"] in ("line", "area") else ""
+                    with theme.card(chart["title"], actions=actions, meta=f"{chart['table']} · {meta}").classes(
+                            "w-full" + wide):
                         box = ui.column().classes("w-full")
                         with box:
                             ui.spinner()

@@ -49,3 +49,4 @@ description = "Veritabanı tablolarından grafikler. Yeni grafik ekranda oluştu
 "err.agg" = "Bilinmeyen hesap: {agg}"
 "err.y_number" = "Değer sütunu sayısal olmalı: {column}"
 "err.no_tables" = "Veritabanında tablo yok."
+"kpi.rows_hint" = "Bağlı veritabanında"

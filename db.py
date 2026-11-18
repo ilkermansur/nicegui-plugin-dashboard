@@ -95,22 +95,48 @@ def rows(url: str, chart: dict) -> list[tuple]:
         raise ChartError("err.query", detail=str(e).splitlines()[0]) from None
 
 
+# Colours come from the theme's CSS variables at draw time (keys starting with ":" are JavaScript),
+# so charts follow light/dark mode and any other theme plugin.
+CSS_VAR = "getComputedStyle(document.body).getPropertyValue('{}').trim()"
+PALETTE = "[" + ", ".join(CSS_VAR.format(f"--ngui-chart-{i}") for i in range(1, 7)) + "]"
+GRID_LINE = {"lineStyle": {":color": CSS_VAR.format("--ngui-chart-grid")}}
+AXIS = {"axisLine": {"show": False}, "axisTick": {"show": False}, "axisLabel": {"fontSize": 11}}
+
+
 def option(chart: dict, data: list[tuple]) -> dict:
     """ECharts option for a chart and its (x, y) rows."""
-    base = {"tooltip": {"trigger": "item" if chart["type"] in ("pie", "scatter") else "axis"},
-            "grid": {"left": 8, "right": 16, "top": 16, "bottom": 8, "containLabel": True},
-            "animation": False}
+    base = {":color": PALETTE, "animation": False,
+            "tooltip": {"trigger": "item" if chart["type"] in ("pie", "scatter") else "axis"},
+            "grid": {"left": 4, "right": 12, "top": 12, "bottom": 4, "containLabel": True}}
     if chart["type"] == "pie":
-        return {**base, "series": [{"type": "pie", "radius": ["40%", "70%"],
-                                    "data": [{"name": str(x), "value": y} for x, y in data]}]}
+        return {**base, "legend": {"bottom": 0, "type": "scroll", "icon": "roundRect", "itemWidth": 10, "itemHeight": 10,
+                                   "textStyle": {"fontSize": 11}},
+                "series": [{"type": "pie", "radius": ["48%", "70%"], "center": ["50%", "45%"],
+                            "itemStyle": {"borderWidth": 2, ":borderColor": CSS_VAR.format("--ngui-surface")},
+                            "label": {"show": False},
+                            "data": [{"name": str(x), "value": y} for x, y in data]}]}
+    value_axis = {"type": "value", "splitLine": GRID_LINE, **AXIS}
     if chart["type"] == "scatter":
-        return {**base, "xAxis": {"type": "value", "scale": True}, "yAxis": {"type": "value", "scale": True},
-                "series": [{"type": "scatter", "data": [[x, y] for x, y in data]}]}
+        return {**base, "xAxis": {**value_axis, "scale": True}, "yAxis": {**value_axis, "scale": True},
+                "series": [{"type": "scatter", "symbolSize": 7, "data": [[x, y] for x, y in data]}]}
     series = {"type": "line" if chart["type"] == "area" else chart["type"], "data": [y for _, y in data]}
+    if chart["type"] == "bar":
+        series.update(barMaxWidth=28, itemStyle={"borderRadius": [4, 4, 0, 0]})
+    else:
+        series.update(smooth=True, symbol="circle", symbolSize=5, lineStyle={"width": 2})
     if chart["type"] == "area":
-        series["areaStyle"] = {}
-    return {**base, "xAxis": {"type": "category", "data": [str(x) for x, _ in data]},
-            "yAxis": {"type": "value"}, "series": [series]}
+        series["areaStyle"] = {"opacity": 0.15}
+    return {**base, "xAxis": {"type": "category", "data": [str(x) for x, _ in data], **AXIS},
+            "yAxis": value_axis, "series": [series]}
+
+
+def source_name(url: str) -> str:
+    """Short database name for the summary card: SQLite, PostgreSQL, ..."""
+    try:
+        backend = engine(url).url.get_backend_name()
+    except ChartError:
+        return "?"
+    return {"postgresql": "PostgreSQL", "sqlite": "SQLite", "mysql": "MySQL"}.get(backend, backend)
 
 
 def demo_url(data_dir: Path) -> str:

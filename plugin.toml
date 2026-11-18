@@ -1,6 +1,6 @@
 id = "dashboard"
 version = "0.1.0"
-core = ">=1.1,<2"  # uses ctx.data_dir
+core = ">=1.2,<2"  # ctx.data_dir (1.1), theme kpi delta / card meta / header actions (1.2)
 dependencies = ["sqlalchemy>=2.0", "psycopg[binary]>=3.1"]
 permissions = ["dashboard.edit"]
 
