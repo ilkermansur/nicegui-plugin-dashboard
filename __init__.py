@@ -21,7 +21,7 @@ CSS = """
 .ngui-dashboard-kpis { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .ngui-dashboard-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
 .ngui-dashboard-chart { width: 100%; height: 280px; }
-.ngui-dashboard-chart svg text { fill: var(--ngui-muted) !important; }
+.ngui-dashboard-chart svg text { fill: var(--ngui-muted) !important; stroke: none !important; }
 .ngui-dashboard-muted { color: var(--ngui-muted); font-size: 0.875rem; }
 .ngui-dashboard-error { color: var(--ngui-danger); font-size: 0.875rem; }
 .ngui-dashboard-builder { width: min(960px, 92vw); max-width: none; }
@@ -135,8 +135,10 @@ def setup(ctx):
                 ui.notify(problem or t("err.no_tables"), type="warning")
                 return
             first = next(iter(tables))
+            text_cols = [c for c, k in tables[first].items() if k == "text"]  # a category axis reads best
             draft = dict(existing or {"id": uuid.uuid4().hex[:8], "title": "", "table": first, "type": "bar",
-                                      "x": next(iter(tables[first])), "agg": "count", "y": None, "limit": 50})
+                                      "x": (text_cols or list(tables[first]))[0], "agg": "count", "y": None,
+                                      "limit": 50})
 
             def columns(kind: str | None = None) -> list[str]:
                 return [c for c, k in tables.get(draft["table"], {}).items() if kind is None or k == kind]
@@ -178,30 +180,32 @@ def setup(ctx):
                 store(items)
                 dlg.close()
 
-            on = lambda _: sync()  # noqa: E731
+            built = []  # sync only once every field exists; bindings fire change events while building
+            on = lambda _: built and sync()  # noqa: E731
             with ui.dialog() as dlg, ui.card().classes("ngui-dashboard-builder"):
                 ui.label(t("chart.edit" if existing else "chart.new")).classes("ngui-card-title")
                 with ui.row().classes("w-full no-wrap items-start gap-6"):
                     with ui.column().classes("w-72 gap-2"):
-                        ui.input(t("field.title")).bind_value(draft, "title").props("dense outlined")
+                        ui.input(t("field.title")).bind_value(draft, "title").props("dense outlined").classes("w-full")
                         ui.select(list(tables), label=t("field.table"), on_change=on).bind_value(
-                            draft, "table").props("dense outlined")
+                            draft, "table").props("dense outlined").classes("w-full")
                         ui.select({k: t(f"type.{k}") for k in CHART_TYPES}, label=t("field.type"),
-                                  on_change=on).bind_value(draft, "type").props("dense outlined")
-                        x_sel = ui.select([], label=t("field.x"), on_change=on).bind_value(draft, "x").props(
-                            "dense outlined")
+                                  on_change=on).bind_value(draft, "type").props("dense outlined").classes("w-full")
+                        x_sel = ui.select(columns(), label=t("field.x"), on_change=on).bind_value(draft, "x").props(
+                            "dense outlined").classes("w-full")
                         agg_sel = ui.select({k: t(f"agg.{k}") for k in AGGS}, label=t("field.agg"),
-                                            on_change=on).bind_value(draft, "agg").props("dense outlined")
-                        y_sel = ui.select([], label=t("field.y"), on_change=on).bind_value(draft, "y").props(
-                            "dense outlined")
+                                            on_change=on).bind_value(draft, "agg").props("dense outlined").classes("w-full")
+                        y_sel = ui.select(columns("number"), label=t("field.y"), on_change=on).bind_value(draft, "y").props(
+                            "dense outlined").classes("w-full")
                         ui.number(t("field.limit"), min=1, max=1000, step=1, on_change=on).bind_value(
-                            draft, "limit").props("dense outlined")
+                            draft, "limit").props("dense outlined").classes("w-full")
                     with ui.column().classes("grow"):
                         ui.label(t("chart.preview")).classes("ngui-dashboard-muted")
                         preview()
                 with ui.row().classes("w-full justify-end"):
                     ui.button(t("action.cancel"), on_click=dlg.close, color=None).props("flat")
                     ui.button(t("action.save"), icon="check", on_click=save).props("unelevated")
+            built.append(True)
             sync()
             dlg.open()
 
