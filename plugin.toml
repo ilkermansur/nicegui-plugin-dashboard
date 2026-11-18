@@ -1,0 +1,5 @@
+id = "dashboard"
+name = { tr = "dashboard", en = "dashboard" }
+version = "0.1.0"
+description = { tr = "dashboard eklentisi", en = "The dashboard plugin" }
+core = ">=1,<2"
