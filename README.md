@@ -45,6 +45,8 @@ Gösterge paneli
 
 Sağdaki önizleme her değişiklikte yeniden çizilir. **Kaydet** grafiği panele ekler. Grafikler bütün kullanıcılar için ortaktır.
 
+**Düzenleme modu.** Grafik kartları normalde yalnızca grafiği gösterir. Başlıktaki **Düzenle** düğmesi düzenleme modunu açar: kartlarda genişlik (üçte bir → üçte iki → tam), yükseklik (normal ↔ uzun), düzenle ve sil düğmeleri belirir, başlıkta **Vazgeç** ve **Kaydet** çıkar. Boyut değişiklikleri **Kaydet**'e basınca saklanır; **Vazgeç** onları atar. Izgara geniş ekranda 3, orta ekranda 2, dar ekranda 1 sütundur; boşluklar kendiliğinden doldurulur.
+
 ## Gerçek veritabanına bağlamak
 
 Postgres'i ngui'nin `docker-compose.yml` dosyasına ayrı bir servis olarak ekle:
@@ -86,6 +88,7 @@ nicegui-plugin-dashboard/
   plugin.toml        core >=1.1, sqlalchemy + psycopg, dashboard.edit yetkisi
   __init__.py        sayfa: KPI'lar, grafik ızgarası, oluşturma diyaloğu, veri kaynağı diyaloğu
   db.py              NiceGUI'siz veritabanı katmanı: şema, doğrulama, sorgu, ECharts seçenekleri, demo veri
+  sizes.py           grafik boyutları (genişlik, yükseklik), varsayılanlar ve geçiş sırası
   locales/*.toml     ekrandaki her metin (grafik türü ve hesap adları dahil)
   tests/             demo veritabanı üzerinde sorgu testleri + uygulamayı açan testler
 ```

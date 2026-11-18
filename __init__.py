@@ -13,16 +13,27 @@ import uuid
 
 from nicegui import run, ui
 
-from . import db
+from . import db, sizes
 from .db import AGGS, CHART_TYPES, ChartError
 
 CSS = """
 .ngui-dashboard-kpis, .ngui-dashboard-grid { display: grid; width: 100%; gap: var(--ngui-gap); }
 .ngui-dashboard-kpis { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-.ngui-dashboard-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); grid-auto-flow: dense; }
-.ngui-dashboard-wide { grid-column: span 2; }
-@media (max-width: 900px) { .ngui-dashboard-wide { grid-column: auto; } }
+.ngui-dashboard-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-flow: dense; }
+.ngui-dashboard-w1 { grid-column: span 1; }
+.ngui-dashboard-w2 { grid-column: span 2; }
+.ngui-dashboard-w3 { grid-column: span 3; }
+@media (max-width: 1100px) {
+  .ngui-dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ngui-dashboard-w3 { grid-column: span 2; }
+}
+@media (max-width: 700px) {
+  .ngui-dashboard-grid { grid-template-columns: minmax(0, 1fr); }
+  .ngui-dashboard-w2, .ngui-dashboard-w3 { grid-column: span 1; }
+}
 .ngui-dashboard-chart { width: 100%; height: 260px; }
+.ngui-dashboard-hl .ngui-dashboard-chart { height: 440px; }
+.ngui-dashboard-editing .ngui-card { border-style: dashed; }
 .ngui-dashboard-chart svg text { fill: var(--ngui-muted) !important; stroke: none !important; }
 .ngui-dashboard-muted { color: var(--ngui-muted); font-size: 0.875rem; }
 .ngui-dashboard-error { color: var(--ngui-danger); font-size: 0.875rem; }
@@ -53,13 +64,35 @@ def setup(ctx):
         theme = ctx.role("theme")
         can_edit = ctx.role("auth").has("dashboard.edit")
         url = db_url()
-        def header_actions():
-            if can_edit:
+        # edit mode: chart buttons and size controls show only while editing; sizes are saved on "Save"
+        edit = {"on": False, "sizes": {}}
+
+        def start_editing():
+            edit.update(on=True, sizes={})
+            toolbar.refresh()
+            board.refresh()
+
+        def stop_editing(save: bool):
+            if save and edit["sizes"]:
+                shared.set("charts", sizes.apply(charts(), edit["sizes"]))
+            edit.update(on=False, sizes={})
+            toolbar.refresh()
+            board.refresh()
+
+        @ui.refreshable
+        def toolbar():
+            if not can_edit:
+                return
+            if edit["on"]:
+                ui.button(t("action.cancel"), on_click=lambda: stop_editing(False), color=None).props("flat")
+                ui.button(t("action.save"), icon="check", on_click=lambda: stop_editing(True))
+            else:
                 ui.button(t("source.title"), icon="storage", on_click=lambda: source_dialog(), color=None).props(
                     "outline")
+                ui.button(t("dash.edit"), icon="edit", on_click=start_editing, color=None).props("outline")
                 ui.button(t("chart.new"), icon="add_chart", on_click=lambda: builder())
 
-        theme.page_header(t("title"), t("description"), actions=header_actions)
+        theme.page_header(t("title"), t("description"), actions=toolbar)
         try:
             tables, problem = await run.io_bound(db.schema, url), None
         except ChartError as e:
@@ -111,18 +144,30 @@ def setup(ctx):
             if not items:
                 ui.label(t("chart.none")).classes("ngui-dashboard-muted")
                 return
-            with ui.element("div").classes("ngui-dashboard-grid"):
+            grid_classes = "ngui-dashboard-grid" + (" ngui-dashboard-editing" if edit["on"] else "")
+            with ui.element("div").classes(grid_classes):
                 for chart in items:
-                    def actions(chart=chart):
-                        if can_edit:
-                            ui.button(icon="edit", on_click=lambda: builder(chart), color=None).props(
-                                "flat round dense").tooltip(t("chart.edit"))
-                            ui.button(icon="delete", on_click=lambda: confirm_delete(chart), color=None).props(
-                                "flat round dense").tooltip(t("chart.delete"))
+                    w, h = edit["sizes"].get(chart["id"], sizes.size(chart))
+
+                    def resize(chart=chart, w=w, h=h, width=None, height=None):
+                        edit["sizes"][chart["id"]] = (width or w, height or h)
+                        board.refresh()
+
+                    def actions(chart=chart, w=w, h=h, resize=resize):
+                        if not edit["on"]:
+                            return
+                        ui.button(icon="width_normal", on_click=lambda: resize(width=sizes.next_width(w)),
+                                  color=None).props("flat round dense").tooltip(t("size.width", size=t(f"size.w{w}")))
+                        ui.button(icon="height", on_click=lambda: resize(height=sizes.next_height(h)),
+                                  color=None).props("flat round dense").tooltip(t("size.height", size=t(f"size.h{h}")))
+                        ui.button(icon="edit", on_click=lambda: builder(chart), color=None).props(
+                            "flat round dense").tooltip(t("chart.edit"))
+                        ui.button(icon="delete", on_click=lambda: confirm_delete(chart), color=None).props(
+                            "flat round dense").tooltip(t("chart.delete"))
                     meta = t(f"agg.{chart['agg']}") if chart["type"] != "scatter" and chart.get("agg") else t("type.scatter")
-                    wide = " ngui-dashboard-wide" if chart["type"] in ("line", "area") else ""
+                    size_classes = f" ngui-dashboard-w{w}" + (" ngui-dashboard-hl" if h == "l" else "")
                     with theme.card(chart["title"], actions=actions, meta=f"{chart['table']} · {meta}").classes(
-                            "w-full" + wide):
+                            "w-full" + size_classes):
                         box = ui.column().classes("w-full")
                         with box:
                             ui.spinner()
